@@ -3,6 +3,8 @@
 use Hasan\DeskApi\Exceptions\MissingKeyException;
 use GuzzleHttp\Exception\RequestException;
 use Hasan\DeskApi\Resources\BaseDeskResource;
+use Hasan\DeskApi\Resources\DeskSearchResponse;
+
 abstract class Client {
     /**
      * HTTP client
@@ -96,13 +98,7 @@ abstract class Client {
             }
         }
         $response = $response->json();
-        $deskClass = "\\Hasan\\DeskApi\\Resources\\Desk".ucwords($response['_links']['self']['class']);
-        if(class_exists($deskClass)){
-            $response  = new $deskClass($response);
-        } else {
-            $response = new BaseDeskResource($response);
-        }
-        return $response;
+        return $this->formatResponse($response, $url);
     }
 
     /**
@@ -122,6 +118,7 @@ abstract class Client {
     }
 
     /**
+     * Return full url from resource
      * @param $resource
      * @return string
      */
@@ -144,5 +141,63 @@ abstract class Client {
         $this->headers['headers']['Accept'] = 'application/json';
         $this->headers['headers']['content-type'] = 'application/json';
         $this->headers['auth'] = [$this->configurations['credentials']['username'], $this->configurations['credentials']['password']];
+    }
+
+    /**
+     * Return resource class
+     * @param $response
+     * @param
+     * @return mixed
+     */
+    private function getResourceClass($response, $url){
+        if(isset($response['_embedded'])){
+            // if the response does not have entries
+            // we get the class from url
+            if($response['total_entries'] < 1 ){
+                $class = $this->getResourceClassFromUrl($url);
+                return $class;
+            }
+            $class = $response['_embedded']['entries'][0]['_links']['self']['class'];
+        } else {
+            $class  = $response['_links']['self']['class'];
+        }
+        return $class;
+    }
+
+    /**
+     * Convert json response to corresponding object class
+     * @param $response
+     * @param $url
+     * @return DeskSearchResponse
+     */
+    private function formatResponse($response, $url){
+        $resourceClass = $this->getResourceClass($response, $url);
+        $deskResourceClass = "\\Hasan\\DeskApi\\Resources\\Desk".$resourceClass;
+        if(isset($response['_embedded'])){
+            $response = new DeskSearchResponse($response, $deskResourceClass);
+        } else {
+            $response  = new $deskResourceClass($response);
+        }
+        return $response;
+    }
+
+    /**
+     * @param $url
+     * @return string
+     */
+    private function getResourceClassFromUrl($url){
+        // get base url from configurations
+        $baseUrl = $this->configurations['credentials']['url'];
+        // remove baseUrl from url
+        $removeBaseUrl = substr($url, strlen($baseUrl));
+        if(substr_count($removeBaseUrl, "/") == 2){
+            $positionOfLastSlash = strrpos($removeBaseUrl, "/") + 1;
+            $class = substr($removeBaseUrl, $positionOfLastSlash, strlen($removeBaseUrl));
+        } else {
+            // find first / and get string
+            $class = substr($removeBaseUrl, 0, strpos($removeBaseUrl, "/"));
+        }
+        $class = str_singular($class);
+        return $class;
     }
 }

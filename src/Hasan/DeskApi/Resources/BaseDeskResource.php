@@ -3,21 +3,31 @@ namespace Hasan\DeskApi\Resources;
 
 class BaseDeskResource {
 
+    /**
+     * convert array to object
+     * @param array $properties
+     */
     public function __construct(Array $properties){
         foreach($properties as $key => $value){
-            if(is_array($value)){
-                $value = json_decode(json_encode($value), false);
-            }
             $this->{$key} = $value;
         }
     }
+
+    /**
+     * Return the first array link href
+     * @param $param
+     * @return string
+     */
     public function link($param){
         try {
-            $url = $this->_links->$param->href;
+            if(isset($this->_embedded)){
+                $response = $this->_embedded[0]->_links[$param]['href'];
+            } else {
+                $response = $this->_links[$param]['href'];
+            }
         } catch(\Exception $e){
             return $e->getMessage();
         }
-        $resourceObject = \DeskApi::get($url);
-        return $resourceObject;
+        return $response;
     }
 }
